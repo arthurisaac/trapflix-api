@@ -264,6 +264,11 @@ router.post('/instance', function (req, res) {
                                 const cover = mm.selectCover(metadata.common.picture);
                                 const thumb = song.name + ".png";
                                 writeFileSync("public/thumbnails/" + thumb, cover.data);
+                                uploadToServer("public/thumbnails/" + thumb, thumb).then(() => {
+                                    console.log('Thumbnail uploaded');
+                                }).catch((err) => {
+                                    console.log(err);
+                                });
                                 const query = `INSERT INTO songs
                                                SET song_name      = ?,
                                                    song_title     = ?,
