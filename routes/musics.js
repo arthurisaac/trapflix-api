@@ -9,7 +9,6 @@ router.get('/', function (req, res, next) {
     res.render('index', {title: 'Express'});
 });
 
-
 router.get('/all_songs', function (req, res, next) {
     const query_service = `SELECT *
                            FROM songs`;
@@ -36,6 +35,7 @@ router.get('/songs_by_sections', function (req, res, next) {
                                   song_title,
                                   song_artist,
                                   song_album,
+                                  album_id,
                                   songs_sections.section_id,
                                   (SELECT title FROM section WHERE id = songs_sections.section_id) as section,
                                   song_thumbnail,
@@ -139,6 +139,51 @@ router.post('/', function (req, res) {
                 return res.status(500).send(error);
             });
 
+
+        //res.send('File uploaded!');
+    });
+});
+
+router.post('/test', function (req, res) {
+    const song_title = req.body.song_title;
+    const song_artist = req.body.song_artist;
+    const song_album = req.body.song_album;
+
+    let sampleFile;
+    let uploadPath;
+
+    if (!req.files || Object.keys(req.files).length === 0) {
+        return res.status(400).send('No files were uploaded.');
+    }
+
+    sampleFile = req.files.trapsong;
+    uploadPath = "public/musics/" + sampleFile.name;
+    sampleFile.mv(uploadPath, function (err) {
+        if (err)
+            return res.status(500).send(err);
+
+            (async () => {
+                try {
+                    const metadata = await mm.parseFile(`${uploadPath}`);
+                    const cover = mm.selectCover(metadata.common.picture);
+                    const thumb = sampleFile.name + ".png";
+                    writeFileSync("public/thumbnails/" + thumb, cover.data);
+                    const query = `INSERT INTO songs
+                                   SET song_name      = ?,
+                                       song_title     = ?,
+                                       song_album     = ?,
+                                       song_artist    = ?,
+                                       song_thumbnail = ?`;
+                    db.query(query, ["http://localhost:3000/musics/" + sampleFile.name, song_title ?? metadata.common.title, song_album ?? metadata.common.album, song_artist ?? metadata.common.albumartist, "http://localhost:3000/thumbnails/" + thumb], (err) => {
+                        if (err) res.status(500).send(err);
+                        if (err) throw err;
+                        res.send(JSON.stringify({success: true}));
+                    });
+                    //console.log(util.inspect(metadata, { showHidden: false, depth: null }));
+                } catch (error) {
+                    console.error(error.message);
+                }
+            })();
 
         //res.send('File uploaded!');
     });
