@@ -246,7 +246,7 @@ router.post('/instance', function (req, res) {
                        year        = ?,
                        artist      = ?,
                        cover       = ?`;
-    db.query(query, [title, description, year, artist, process.env.URL + albumCover.name], (err, result) => {
+    db.query(query, [title, description, year, artist, `${process.env.URL}/${albumCover.name}`], (err, result) => {
         //if (err) res.status(500).send(err);
         if (err) throw err;
 
@@ -272,11 +272,11 @@ router.post('/instance', function (req, res) {
                                                    song_thumbnail = ?,
                                                    album_id       = ?`;
                                 db.query(query, [
-                                    process.env.URL + sampleFile.name,
+                                    process.env.URL + "/" + sampleFile.name,
                                     metadata.common.title,
                                     album ?? metadata.common.album,
                                     artist ?? metadata.common.albumartist,
-                                    process.env.URL + "/thumbnails/" + thumb,
+                                    process.env.URL + "/" + thumb,
                                     result.insertId
                                 ], (err) => {
                                     if (err) res.status(500).send(err);
