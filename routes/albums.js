@@ -94,7 +94,7 @@ router.post('/only_album_information', function (req, res) {
 Whole Album details (information) with songs
  */
 
-router.post('/localinstance', function (req, res) {
+router.post('/local', function (req, res) {
     const artist = req.body.song_artist;
     const title = req.body.song_title;
     const album = req.body.song_album;
@@ -115,12 +115,6 @@ router.post('/localinstance', function (req, res) {
 
     albumCover.mv(uploadCoverPath, function (err) {
         if (err) return res.status(500).send(err);
-        /*TODO: upload to server
-        uploadToServer("public/covers/", albumCover.name).then(() => {
-            console.log('cover uploaded');
-        }).catch((err) => {
-            console.log(err);
-        });*/
     });
 
     // save album
@@ -130,52 +124,105 @@ router.post('/localinstance', function (req, res) {
                        year        = ?,
                        artist      = ?,
                        cover       = ?`;
-    db.query(query, [title, description, year, artist, process.env.URL + '/thumbnails/' + albumCover.name], (err, result) => {
+    db.query(query, [title, description, year, artist, `${process.env.URL}/thumbnails/${albumCover.name}`], (err, result) => {
         //if (err) res.status(500).send(err);
         if (err) throw err;
 
-        req.files.trapsong.map((song) => {
-            let sampleFile = song;
-            let uploadPath = "public/musics/" + song.name;
+        if (req.files.trapsong.length !== undefined) {
+            req.files.trapsong.map((song) => {
+                let sampleFile = song;
+                let uploadPath = "public/musics/" + song.name;
+                sampleFile.mv(uploadPath, function (err) {
+                    if (err) return res.status(500).send(err);
+                    (async () => {
+                        try {
+                            const metadata = await mm.parseFile(`${uploadPath}`);
+                            const cover = mm.selectCover(metadata.common.picture);
+                            const thumb = song.name + ".png";
+                            writeFileSync("public/thumbnails/" + thumb, cover.data);
+                            uploadToServer("public/thumbnails/" + thumb, thumb).then(() => {
+                                console.log('Thumbnail uploaded');
+                            }).catch((err) => {
+                                console.log(err);
+                            });
+                            const query = `INSERT INTO songs
+                                               SET song_name      = ?,
+                                                   song_title     = ?,
+                                                   song_album     = ?,
+                                                   song_artist    = ?,
+                                                   song_thumbnail = ?,
+                                                   album_id       = ?`;
+                            db.query(query, [
+                                process.env.URL + "/musics/" + sampleFile.name,
+                                metadata.common.title,
+                                album ?? metadata.common.album,
+                                artist ?? metadata.common.albumartist,
+                                process.env.URL + "/thumnails/" + thumb,
+                                result.insertId
+                            ], (err) => {
+                                if (err) res.status(500).send(err);
+                                if (err) throw err;
+                                //res.send(JSON.stringify({success: true}));
+                            });
+                            //console.log(util.inspect(metadata, { showHidden: false, depth: null }));
+                        } catch (error) {
+                            console.error(error.message);
+                        }
+                    })()
+
+                });
+            });
+        } else {
+            let sampleFile = req.files.trapsong;
+            let uploadPath = "public/musics/" + sampleFile.name;
             sampleFile.mv(uploadPath, function (err) {
                 if (err) return res.status(500).send(err);
-                //res.send("success");
+                uploadToServer(uploadPath, sampleFile.name)
+                    .then(() => {
+                        //save mp3
+                        (async () => {
+                            try {
+                                const metadata = await mm.parseFile(`${uploadPath}`);
+                                const cover = mm.selectCover(metadata.common.picture);
+                                const thumb = sampleFile.name + ".png";
+                                writeFileSync("public/thumbnails/" + thumb, cover.data);
+                                uploadToServer("public/thumbnails/" + thumb, thumb).then(() => {
+                                    console.log('Thumbnail uploaded');
+                                }).catch((err) => {
+                                    console.log(err);
+                                });
+                                const query = `INSERT INTO songs
+                                               SET song_name      = ?,
+                                                   song_title     = ?,
+                                                   song_album     = ?,
+                                                   song_artist    = ?,
+                                                   song_thumbnail = ?,
+                                                   album_id       = ?`;
+                                db.query(query, [
+                                    process.env.URL + "/" + sampleFile.name,
+                                    metadata.common.title,
+                                    album ?? metadata.common.album,
+                                    artist ?? metadata.common.albumartist,
+                                    process.env.URL + "/" + thumb,
+                                    result.insertId
+                                ], (err) => {
+                                    if (err) res.status(500).send(err);
+                                    if (err) throw err;
+                                    //res.send(JSON.stringify({success: true}));
+                                });
+                                //console.log(util.inspect(metadata, { showHidden: false, depth: null }));
+                            } catch (error) {
+                                console.error(error.message);
+                            }
+                        })()
+                    })
+                    .catch((error) => {
+                        return res.status(500).send(error);
+                    });
 
-                //save mp3
-                (async () => {
-                    try {
-                        const metadata = await mm.parseFile(`${uploadPath}`);
-                        const cover = mm.selectCover(metadata.common.picture);
-                        const thumb = song.name + ".png";
-                        writeFileSync("public/thumbnails/" + thumb, cover.data);
-                        const query = `INSERT INTO songs
-                                       SET song_name      = ?,
-                                           song_title     = ?,
-                                           song_album     = ?,
-                                           song_artist    = ?,
-                                           song_thumbnail = ?,
-                                           album_id       = ?`;
-                        db.query(query, [
-                            process.env.URL + "/musics/" + sampleFile.name,
-                            metadata.common.title,
-                            album ?? metadata.common.album,
-                            artist ?? metadata.common.albumartist,
-                            process.env.URL + "/thumbnails/" + thumb,
-                            result.insertId
-                        ], (err) => {
-                            if (err) res.status(500).send(err);
-                            if (err) throw err;
-                            //res.send(JSON.stringify({success: true}));
-                        });
-                        //console.log(util.inspect(metadata, { showHidden: false, depth: null }));
-                    } catch (error) {
-                        console.error(error.message);
-                    }
-                })()
-                //res.send(JSON.stringify({success: true}));
             });
+        }
 
-        });
     });
     res.send(JSON.stringify({success: true}));
 
@@ -250,9 +297,60 @@ router.post('/instance', function (req, res) {
         //if (err) res.status(500).send(err);
         if (err) throw err;
 
-        req.files.trapsong.map((song) => {
-            let sampleFile = song;
-            let uploadPath = "public/musics/" + song.name;
+        if (Object.keys(req.files).length > 1) {
+            req.files.trapsong.map((song) => {
+                let sampleFile = song;
+                let uploadPath = "public/musics/" + song.name;
+                sampleFile.mv(uploadPath, function (err) {
+                    if (err) return res.status(500).send(err);
+                    uploadToServer(uploadPath, sampleFile.name)
+                        .then(() => {
+                            //save mp3
+                            (async () => {
+                                try {
+                                    const metadata = await mm.parseFile(`${uploadPath}`);
+                                    const cover = mm.selectCover(metadata.common.picture);
+                                    const thumb = song.name + ".png";
+                                    writeFileSync("public/thumbnails/" + thumb, cover.data);
+                                    uploadToServer("public/thumbnails/" + thumb, thumb).then(() => {
+                                        console.log('Thumbnail uploaded');
+                                    }).catch((err) => {
+                                        console.log(err);
+                                    });
+                                    const query = `INSERT INTO songs
+                                               SET song_name      = ?,
+                                                   song_title     = ?,
+                                                   song_album     = ?,
+                                                   song_artist    = ?,
+                                                   song_thumbnail = ?,
+                                                   album_id       = ?`;
+                                    db.query(query, [
+                                        process.env.URL + "/" + sampleFile.name,
+                                        metadata.common.title,
+                                        album ?? metadata.common.album,
+                                        artist ?? metadata.common.albumartist,
+                                        process.env.URL + "/" + thumb,
+                                        result.insertId
+                                    ], (err) => {
+                                        if (err) res.status(500).send(err);
+                                        if (err) throw err;
+                                        //res.send(JSON.stringify({success: true}));
+                                    });
+                                    //console.log(util.inspect(metadata, { showHidden: false, depth: null }));
+                                } catch (error) {
+                                    console.error(error.message);
+                                }
+                            })()
+                        })
+                        .catch((error) => {
+                            return res.status(500).send(error);
+                        });
+
+                });
+            });
+        } else {
+            let sampleFile = req.files.trapsong;
+            let uploadPath = "public/musics/" + sampleFile.name;
             sampleFile.mv(uploadPath, function (err) {
                 if (err) return res.status(500).send(err);
                 uploadToServer(uploadPath, sampleFile.name)
@@ -262,7 +360,7 @@ router.post('/instance', function (req, res) {
                             try {
                                 const metadata = await mm.parseFile(`${uploadPath}`);
                                 const cover = mm.selectCover(metadata.common.picture);
-                                const thumb = song.name + ".png";
+                                const thumb = sampleFile.name + ".png";
                                 writeFileSync("public/thumbnails/" + thumb, cover.data);
                                 uploadToServer("public/thumbnails/" + thumb, thumb).then(() => {
                                     console.log('Thumbnail uploaded');
@@ -299,8 +397,8 @@ router.post('/instance', function (req, res) {
                     });
 
             });
+        }
 
-        });
     });
     res.send(JSON.stringify({success: true}));
 
